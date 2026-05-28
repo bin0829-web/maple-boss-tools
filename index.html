@@ -211,8 +211,8 @@
 
     .slot {
       position: absolute;
-      min-width: 86px;
-      min-height: 42px;
+      min-width: 120px;
+      min-height: 46px;
       transform: translate(-50%, -50%);
       border-radius: 999px;
       border: 2px solid rgba(72,186,255,.75);
@@ -250,12 +250,14 @@
     }
 
     .slot-person {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 900;
-      max-width: 140px;
+      max-width: 190px;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      text-align: center;
+      line-height: 1.25;
       pointer-events: none;
       text-shadow: 0 2px 4px rgba(0,0,0,.75);
     }
@@ -464,13 +466,13 @@
   const state = {
     chars: [],
     platforms: [
-      { id: uid(), name: "左上平台", x: 29, y: 28, personId: null },
-      { id: uid(), name: "左中平台", x: 26, y: 49, personId: null },
-      { id: uid(), name: "左下平台", x: 29, y: 72, personId: null },
-      { id: uid(), name: "中央平台", x: 51, y: 46, personId: null },
-      { id: uid(), name: "右上平台", x: 72, y: 30, personId: null },
-      { id: uid(), name: "右中平台", x: 76, y: 51, personId: null },
-      { id: uid(), name: "右下平台", x: 72, y: 73, personId: null }
+      { id: uid(), name: "左上平台", x: 29, y: 28, personIds: [] },
+      { id: uid(), name: "左中平台", x: 26, y: 49, personIds: [] },
+      { id: uid(), name: "左下平台", x: 29, y: 72, personIds: [] },
+      { id: uid(), name: "中央平台", x: 51, y: 46, personIds: [] },
+      { id: uid(), name: "右上平台", x: 72, y: 30, personIds: [] },
+      { id: uid(), name: "右中平台", x: 76, y: 51, personIds: [] },
+      { id: uid(), name: "右下平台", x: 72, y: 73, personIds: [] }
     ],
     editMode: false,
     selectedCharId: null,
@@ -499,7 +501,13 @@
       if (!raw) return;
       const data = JSON.parse(raw);
       if (Array.isArray(data.chars)) state.chars = data.chars;
-      if (Array.isArray(data.platforms)) state.platforms = data.platforms;
+      if (Array.isArray(data.platforms)) {
+        state.platforms = data.platforms.map(p => ({
+          ...p,
+          personIds: Array.isArray(p.personIds) ? p.personIds : (p.personId ? [p.personId] : []),
+          personId: undefined
+        }));
+      }
     } catch (e) {}
   }
 
@@ -528,7 +536,7 @@
     $("charCount").textContent = `${state.chars.length} / ${MAX_CHARS}`;
 
     state.chars.forEach(ch => {
-      const assigned = state.platforms.some(p => p.personId === ch.id);
+      const assigned = state.platforms.some(p => Array.isArray(p.personIds) && p.personIds.includes(ch.id));
       const card = document.createElement("div");
       card.className = "char-card" + (assigned ? " assigned" : "") + (state.selectedCharId === ch.id ? " selected" : "");
       card.draggable = true;
@@ -561,7 +569,7 @@
         if (act === "del") {
           if (confirm(`刪除「${ch.name}」？`)) {
             state.chars = state.chars.filter(x => x.id !== ch.id);
-            state.platforms.forEach(p => { if (p.personId === ch.id) p.personId = null; });
+            state.platforms.forEach(p => { p.personIds = (p.personIds || []).filter(id => id !== ch.id); });
             if (state.selectedCharId === ch.id) state.selectedCharId = null;
             render();
           }
@@ -581,9 +589,9 @@
     map.querySelectorAll(".slot").forEach(el => el.remove());
 
     state.platforms.forEach(p => {
-      const person = state.chars.find(c => c.id === p.personId);
+      const people = (p.personIds || []).map(id => state.chars.find(c => c.id === id)).filter(Boolean);
       const slot = document.createElement("div");
-      slot.className = "slot" + (person ? "" : " empty") + (state.editMode ? " editing" : "") + (state.selectedPlatformId === p.id ? " selected" : "");
+      slot.className = "slot" + (people.length ? "" : " empty") + (state.editMode ? " editing" : "") + (state.selectedPlatformId === p.id ? " selected" : "");
       slot.style.left = p.x + "%";
       slot.style.top = p.y + "%";
       slot.dataset.id = p.id;
@@ -592,8 +600,8 @@
           <button class="small ghost" data-act="rename">改名</button>
           <button class="small danger" data-act="remove">刪</button>
         </div>
-        <div class="slot-title">${escapeHtml(p.name)}</div>
-        <div class="slot-person">${person ? escapeHtml(person.name) : "空位"}</div>
+        <div class="slot-title">${escapeHtml(p.name)}${people.length ? "｜" + people.length + "人" : ""}</div>
+        <div class="slot-person">${people.length ? people.map(x => escapeHtml(x.name)).join("、") : "空位"}</div>
       `;
 
       slot.addEventListener("dragover", (e) => {
@@ -654,9 +662,9 @@
           return;
         }
 
-        if (p.personId) {
-          if (confirm(`清除「${p.name}」上的人物？`)) {
-            p.personId = null;
+        if ((p.personIds || []).length) {
+          if (confirm(`清除「${p.name}」上的全部人物？`)) {
+            p.personIds = [];
             render();
           }
         }
@@ -675,13 +683,13 @@
     }
 
     state.platforms.forEach(p => {
-      const person = state.chars.find(c => c.id === p.personId);
+      const people = (p.personIds || []).map(id => state.chars.find(c => c.id === id)).filter(Boolean);
       const item = document.createElement("div");
       item.className = "platform-item" + (state.selectedPlatformId === p.id ? " active" : "");
       item.innerHTML = `
         <div>
-          <strong>${escapeHtml(p.name)}</strong>
-          <div class="char-meta">${person ? "站位：" + escapeHtml(person.name) : "空位"}｜x:${p.x.toFixed(1)} y:${p.y.toFixed(1)}</div>
+          <strong>${escapeHtml(p.name)}${people.length ? "｜" + people.length + "人" : ""}</strong>
+          <div class="char-meta">${people.length ? "站位：" + people.map(x => escapeHtml(x.name)).join("、") : "空位"}｜x:${p.x.toFixed(1)} y:${p.y.toFixed(1)}</div>
         </div>
         <div class="row">
           <button class="small ghost" data-act="rename">改</button>
@@ -722,12 +730,15 @@
     const platform = state.platforms.find(p => p.id === platformId);
     if (!char || !platform) return;
 
+    // 同一個人物只允許出現在一個平台；但同一平台可放多人
     state.platforms.forEach(p => {
-      if (p.personId === charId) p.personId = null;
+      p.personIds = (p.personIds || []).filter(id => id !== charId);
     });
 
-    platform.personId = charId;
-    toast(`${char.name} 已放到 ${platform.name}`);
+    platform.personIds = platform.personIds || [];
+    platform.personIds.push(charId);
+
+    toast(`${char.name} 已加入 ${platform.name}`);
     render();
   }
 
@@ -759,7 +770,7 @@
       name: name.trim(),
       x,
       y,
-      personId: null
+      personIds: []
     });
     state.pendingAddPlatform = false;
     toast("已新增平台");
@@ -789,7 +800,11 @@
 
   function importData(data) {
     if (!data || !Array.isArray(data.platforms)) throw new Error("JSON 格式不正確");
-    state.platforms = data.platforms;
+    state.platforms = data.platforms.map(p => ({
+      ...p,
+      personIds: Array.isArray(p.personIds) ? p.personIds : (p.personId ? [p.personId] : []),
+      personId: undefined
+    }));
     if (Array.isArray(data.chars)) state.chars = data.chars.slice(0, MAX_CHARS);
     state.selectedCharId = null;
     state.selectedPlatformId = null;
@@ -824,14 +839,14 @@
   $("fillDemoBtn").addEventListener("click", () => {
     const names = ["主教", "黑騎士", "英雄", "聖騎士", "夜使者", "箭神", "神射手", "火毒", "冰雷", "拳霸", "槍神", "隊長"];
     state.chars = names.map(n => ({ id: uid(), name: n }));
-    state.platforms.forEach(p => p.personId = null);
+    state.platforms.forEach(p => p.personIds = []);
     render();
   });
 
   $("clearCharsBtn").addEventListener("click", () => {
     if (!confirm("清空全部人物名單？")) return;
     state.chars = [];
-    state.platforms.forEach(p => p.personId = null);
+    state.platforms.forEach(p => p.personIds = []);
     render();
   });
 
@@ -858,7 +873,7 @@
   });
 
   $("clearPositionsBtn").addEventListener("click", () => {
-    state.platforms.forEach(p => p.personId = null);
+    state.platforms.forEach(p => p.personIds = []);
     render();
     toast("已清空站位");
   });
@@ -874,7 +889,7 @@
     if (!name) return;
     const layouts = getLayouts();
     layouts[name] = {
-      platforms: state.platforms.map(p => ({ ...p, personId: null }))
+      platforms: state.platforms.map(p => ({ ...p, personIds: [] }))
     };
     setLayouts(layouts);
     $("layoutName").value = name;
@@ -887,7 +902,7 @@
     if (!name) return toast("請先選擇版型");
     const layouts = getLayouts();
     if (!layouts[name]) return;
-    state.platforms = layouts[name].platforms.map(p => ({ ...p, id: uid(), personId: null }));
+    state.platforms = layouts[name].platforms.map(p => ({ ...p, id: uid(), personIds: [] }));
     $("layoutName").value = name;
     render();
     toast("版型已載入");
