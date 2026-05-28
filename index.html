@@ -786,7 +786,12 @@
   }
 
   function setLayouts(layouts) {
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify(layouts));
+    try {
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(layouts));
+    } catch (e) {
+      console.error("儲存版型失敗", e);
+      alert("儲存失敗，可能是瀏覽器儲存空間不足");
+    }
   }
 
   function exportData() {
